@@ -3,6 +3,7 @@ import urlparse
 import re
 from signal import signal, SIGINT, SIGTERM
 from sys import exit
+import logging
 
 PORT=8880
 FORM_PATH="Shorten.html"
@@ -17,11 +18,16 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
     def __init__(self, *args, **kwargs):
         super(ShortenURLHandler, self).__init__(*args, **kwargs)
 
+    def log_message(self, fmtstr, *args):
+      logging.info("%s - - [%s] %s" %
+                         (self.client_address[0],
+                          self.log_date_time_string(),
+						  fmtstr%args))
+
     def do_GET(self):
       path = self.path.lstrip("/")
       resp = None
-      print path
-      print  ShortenURLHandler.shortUrlMap
+      logging.debug("Received request for path: " +  path)
       if path in ShortenURLHandler.shortUrlMap:
         resp = ShortenURLHandler.shortUrlMap[path]
         self.send_response(302)
@@ -66,15 +72,22 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
 
 def run(server_class=BaseHTTPServer.HTTPServer,
         handler_class=BaseHTTPServer.BaseHTTPRequestHandler):
+    server_address = ('', PORT)
+    httpd = server_class(server_address, handler_class)
+    httpd.serve_forever()
+
+def main():
+    # Set up signal handlers
     def handler(signum, frame):
         print "Exiting due to signal %d." % signum
         exit(0)
     signal(SIGINT, handler)
     signal(SIGTERM, handler)
 
-    server_address = ('', PORT)
-    httpd = server_class(server_address, handler_class)
-    httpd.serve_forever()
+	# Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    run(BaseHTTPServer.HTTPServer, ShortenURLHandler);
 
 if __name__ == "__main__":
-    run(BaseHTTPServer.HTTPServer, ShortenURLHandler);
+	main()

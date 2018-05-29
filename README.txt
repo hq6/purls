@@ -17,3 +17,8 @@ persist as long as the process is not killed.
 We assume that this shortener is for personal use only, and that the
 BaseHTTPServer.BaseHTTPRequestHandler is single-threaded, so we do not worry
 about data races.
+
+## References.
+
+ - [https://github.com/python/cpython/blob/2.7/Lib/BaseHTTPServer.py]
+ - [https://stackoverflow.com/a/3389505]
