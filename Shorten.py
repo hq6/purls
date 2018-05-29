@@ -4,9 +4,12 @@ import urlparse
 PORT=8880
 FORM_PATH="Shorten.html"
 
+# This should be set based on your domain, and omit the trailing `/`.
+DOMAIN_PREFIX = "https://hq6.me/u"
+
 class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
     # Map short URL suffix to full URL
-    shortUrlMap = {"foo": "https://hq6.me"}
+    shortUrlMap = {}
     nextGenerated = 1
     def __init__(self, *args, **kwargs):
         super(ShortenURLHandler, self).__init__(*args, **kwargs)
@@ -52,7 +55,7 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
 
       # Send response
       self.send_response(200);
-      response = "Your Shiny New ShortURL: https://hq6.me/u/%s" % shortUrl
+      response = "Your Shiny New ShortURL: %s/%s" % (DOMAIN_PREFIX.rstrip('/'), shortUrl)
       self.send_header("Content-Type", "text/plain")
       self.send_header("Content-Length", len(response))
       self.end_headers()
