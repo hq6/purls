@@ -42,8 +42,7 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       postBody = self.rfile.read(contentLength)
       parsedBody = urlparse.parse_qs(postBody)
 
-      # TODO: Make the naming consistent
-      fullUrl = parsedBody['longUrl'][0]
+      fullUrl = parsedBody['fullUrl'][0]
       shortUrl = None
       if 'desiredShortUrl' in parsedBody:
           shortUrl = parsedBody['desiredShortUrl'][0]
