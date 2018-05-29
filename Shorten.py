@@ -1,6 +1,8 @@
 import BaseHTTPServer
 import urlparse
 import re
+from signal import signal, SIGINT, SIGTERM
+from sys import exit
 
 PORT=8880
 FORM_PATH="Shorten.html"
@@ -62,10 +64,14 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       self.end_headers()
       self.wfile.write(response)
 
-
-
 def run(server_class=BaseHTTPServer.HTTPServer,
         handler_class=BaseHTTPServer.BaseHTTPRequestHandler):
+    def handler(signum, frame):
+        print "Exiting due to signal %d." % signum
+        exit(0)
+    signal(SIGINT, handler)
+    signal(SIGTERM, handler)
+
     server_address = ('', PORT)
     httpd = server_class(server_address, handler_class)
     httpd.serve_forever()
