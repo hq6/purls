@@ -1,5 +1,6 @@
 import BaseHTTPServer
 import urlparse
+import re
 
 PORT=8880
 FORM_PATH="Shorten.html"
@@ -46,6 +47,7 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       shortUrl = None
       if 'desiredShortUrl' in parsedBody:
           shortUrl = parsedBody['desiredShortUrl'][0]
+          shortUrl = re.sub("[\W_]+", '', shortUrl)
       else:
           shortUrl = str(ShortenURLHandler.nextGenerated)
           ShortenURLHandler.nextGenerated += 1
