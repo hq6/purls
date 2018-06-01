@@ -24,6 +24,14 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
                           self.log_date_time_string(),
 						  fmtstr%args))
 
+    # This assumes that the return code is 200.
+    def write_response(self, response = "", content_type = "text/plain"):
+      self.send_response(200);
+      self.send_header("Content-Type", content_type)
+      self.send_header("Content-Length", len(response))
+      self.end_headers()
+      self.wfile.write(response)
+
     def do_GET(self):
       path = self.path.lstrip("/")
       resp = None
@@ -40,18 +48,26 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
         except IOError:
           self.send_error(404, "File not found")
           return
-        self.send_response(200);
-        self.send_header("Content-Type", "text/html")
-        self.send_header("Content-Length", len(createForm))
-        self.end_headers()
-        self.wfile.write(createForm)
+        self.write_response(createForm, "text/html")
 
     def do_POST(self):
       contentLength = int(self.headers.getheader('Content-Length', 0))
       postBody = self.rfile.read(contentLength)
       parsedBody = urlparse.parse_qs(postBody)
 
-      fullUrl = parsedBody['fullUrl'][0]
+      fullUrl = None
+      try:
+         fullUrl = parsedBody['fullUrl'][0]
+      except KeyError:
+         pass
+
+      if not fullUrl:
+          self.write_response()
+          return
+
+      if not fullUrl.startswith("http"):
+        fullUrl = "http://" + fullUrl
+
       shortUrl = None
       if 'desiredShortUrl' in parsedBody:
           shortUrl = parsedBody['desiredShortUrl'][0]
@@ -63,12 +79,7 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       ShortenURLHandler.shortUrlMap[shortUrl] = fullUrl
 
       # Send response
-      self.send_response(200);
-      response = "Your Shiny New ShortURL: %s/%s" % (DOMAIN_PREFIX.rstrip('/'), shortUrl)
-      self.send_header("Content-Type", "text/plain")
-      self.send_header("Content-Length", len(response))
-      self.end_headers()
-      self.wfile.write(response)
+      self.write_response("%s/%s" % (DOMAIN_PREFIX.rstrip('/'), shortUrl))
 
 def run(server_class=BaseHTTPServer.HTTPServer,
         handler_class=BaseHTTPServer.BaseHTTPRequestHandler):
