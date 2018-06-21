@@ -10,6 +10,7 @@ import sqlite3
 from threading import Thread
 import threading
 import socket, sys
+import shlex
 
 # Control-related variables
 CONTROL_PORT = 7770
@@ -38,7 +39,7 @@ class SqliteBackedKVStore(object):
 
        with self.mutex:
          self.inMemoryMap = {}
-         self.db = sqlite3.connect(dbPath)
+         self.db = sqlite3.connect(dbPath, check_same_thread=False)
          self.db.row_factory = sqlite3.Row
          c = self.db.cursor()
          c.execute("CREATE TABLE IF NOT EXISTS {} ({} TEXT PRIMARY KEY, {} TEXT)".format(table, keyCol, valueCol))
@@ -71,8 +72,12 @@ class SqliteBackedKVStore(object):
     def __delitem__(self, key):
       with self.mutex:
         c = self.db.cursor()
-        c.execute("DELETE FROM {} WHERE {} = ?".format(self.table, self.keyCol), key)
+        c.execute("DELETE FROM {} WHERE {} = ?".format(self.table, self.keyCol), (key,))
         self.db.commit()
+        try:
+          del self.inMemoryMap[key]
+        except KeyError:
+          pass
 
 class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
     # Map short URL suffix to full URL
@@ -86,6 +91,29 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
                          (self.client_address[0],
                           self.log_date_time_string(),
 						  fmtstr%args))
+
+    # Note that the shortUrl parameter is a preference.
+    @staticmethod
+    def shorten(fullUrl, shortUrl = None):
+      # Allow only alphanumeric URLs
+      if shortUrl:
+          shortUrl = re.sub("[\W_]+", '', shortUrl)
+      else:
+          shortUrl = str(ShortenURLHandler.nextGenerated)
+          ShortenURLHandler.nextGenerated += 1
+
+      success = False
+      while not success:
+        try:
+          ShortenURLHandler.shortUrlMap[shortUrl] = fullUrl
+          success = True
+        except KeyExistError:
+          # On failure, try with generated URLs until success.
+          shortUrl = str(ShortenURLHandler.nextGenerated)
+          ShortenURLHandler.nextGenerated += 1
+          success = False
+      return shortUrl
+
 
     # This assumes that the return code is 200.
     def write_response(self, response = "", content_type = "text/plain"):
@@ -134,21 +162,8 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       shortUrl = None
       if 'desiredShortUrl' in parsedBody:
           shortUrl = parsedBody['desiredShortUrl'][0]
-          shortUrl = re.sub("[\W_]+", '', shortUrl)
-      else:
-          shortUrl = str(ShortenURLHandler.nextGenerated)
-          ShortenURLHandler.nextGenerated += 1
 
-      success = False
-      while not success:
-        try:
-          ShortenURLHandler.shortUrlMap[shortUrl] = fullUrl
-          success = True
-        except KeyExistError:
-          # On failure, try with generated URLs until success.
-          shortUrl = str(ShortenURLHandler.nextGenerated)
-          ShortenURLHandler.nextGenerated += 1
-          success = False
+      shortUrl = ShortenURLHandler.shorten(fullUrl, shortUrl)
 
       # Send response
       self.write_response("%s/%s" % (DOMAIN_PREFIX.rstrip('/'), shortUrl))
@@ -173,10 +188,50 @@ def startControlInterface():
               promptSent = True
             buf = clientsocket.recv(MAX_COMMAND_LENGTH)
             buf = buf.strip()
-            if buf == 'exit':
+            # Ignore empty lines
+            if buf == '':
+               promptSent = False
+               continue
+
+            argv = shlex.split(buf)
+            cmd = argv[0].lower()
+            if cmd == 'exit':
                 print "Client disconnected from control interface..."
                 clientsocket.close()
                 return
+            elif cmd == 'help':
+                controlCommands = """
+List of commands:
+  help
+  exit
+  add <fullUrl> [shortUrl]
+  del <shortUrl>
+  get <shortUrl>
+                """.strip()
+                clientsocket.send(controlCommands + "\n")
+            elif cmd == 'add':
+                output = ""
+                if len(argv) < 2:
+                    output = "Usage: add <fullUrl> [shortUrl]"
+                elif len(argv) == 2:
+                    output = ShortenURLHandler.shorten(argv[1])
+                else:
+                    output = ShortenURLHandler.shorten(argv[1], argv[2])
+                clientsocket.send(output + "\n")
+            elif cmd == 'del':
+                if len(argv) < 2:
+                    clientsocket.send("Usage: del <shortUrl>\n")
+                else:
+                    del ShortenURLHandler.shortUrlMap[argv[1]]
+            elif cmd == 'get':
+                output = ""
+                if len(argv) < 2:
+                    output = "Usage: get <shortUrl>"
+                elif argv[1] not in ShortenURLHandler.shortUrlMap:
+                    output = "Key '%s' not found." % argv[1]
+                else:
+                    output = ShortenURLHandler.shortUrlMap[argv[1]]
+                clientsocket.send(output + "\n")
             else:
                 clientsocket.send("Unrecognized command '%s'\n" % buf)
             promptSent = False
