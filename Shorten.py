@@ -187,10 +187,13 @@ def startControlInterface():
         clientsocket.settimeout(1)
         clientsocket.send(">")
         promptSent = True
+        sentOutput = True
         global shutdownRequested
         while not shutdownRequested:
           try:
             if not promptSent:
+              if sentOutput:
+                clientsocket.send("\n")
               clientsocket.send(">")
               promptSent = True
             buf = clientsocket.recv(MAX_COMMAND_LENGTH)
@@ -200,6 +203,8 @@ def startControlInterface():
                promptSent = False
                continue
 
+            # Assume that commands send output unless they specify otherwise.
+            sentOutput = True
             argv = shlex.split(buf)
             cmd = argv[0].lower()
             if cmd == 'exit':
@@ -216,7 +221,7 @@ List of commands:
   get <shortUrl>
   list [-l]
                 """.strip()
-                clientsocket.send(controlCommands + "\n")
+                clientsocket.send(controlCommands)
             elif cmd == 'add':
                 output = ""
                 if len(argv) < 2:
@@ -225,12 +230,13 @@ List of commands:
                     output = ShortenURLHandler.shorten(argv[1])
                 else:
                     output = ShortenURLHandler.shorten(argv[1], argv[2])
-                clientsocket.send(output + "\n")
+                clientsocket.send(output)
             elif cmd == 'del':
                 if len(argv) < 2:
-                    clientsocket.send("Usage: del <shortUrl>\n")
+                    clientsocket.send("Usage: del <shortUrl>")
                 else:
                     del ShortenURLHandler.shortUrlMap[argv[1]]
+                    sentOutput = False
             elif cmd == 'get':
                 output = ""
                 if len(argv) < 2:
@@ -239,7 +245,7 @@ List of commands:
                     output = "Key '%s' not found." % argv[1]
                 else:
                     output = ShortenURLHandler.shortUrlMap[argv[1]]
-                clientsocket.send(output + "\n")
+                clientsocket.send(output)
             elif cmd == 'list' or cmd == "ls":
                 output = []
                 d = ShortenURLHandler.shortUrlMap.snapshot()
@@ -248,9 +254,9 @@ List of commands:
                     output.append(key + " : " + d[key])
                   else:
                     output.append(key)
-                clientsocket.send("\n".join(output) + "\n")
+                clientsocket.send("\n".join(output))
             else:
-                clientsocket.send("Unrecognized command '%s'\n" % buf)
+                clientsocket.send("Unrecognized command '%s'" % buf)
             promptSent = False
           except socket.timeout:
             pass
