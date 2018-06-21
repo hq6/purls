@@ -231,13 +231,13 @@ List of commands:
                 else:
                     output = ShortenURLHandler.shorten(argv[1], argv[2])
                 clientsocket.send(output)
-            elif cmd == 'del':
+            elif cmd == 'del' or cmd == "rm":
                 if len(argv) < 2:
                     clientsocket.send("Usage: del <shortUrl>")
                 else:
                     del ShortenURLHandler.shortUrlMap[argv[1]]
                     sentOutput = False
-            elif cmd == 'get':
+            elif cmd == 'get' or cmd == "cat":
                 output = ""
                 if len(argv) < 2:
                     output = "Usage: get <shortUrl>"
