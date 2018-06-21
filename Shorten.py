@@ -11,6 +11,7 @@ from threading import Thread
 import threading
 import socket, sys
 import shlex
+import copy
 
 # Control-related variables
 CONTROL_PORT = 7770
@@ -78,6 +79,12 @@ class SqliteBackedKVStore(object):
           del self.inMemoryMap[key]
         except KeyError:
           pass
+
+    def snapshot(self):
+      with self.mutex:
+        # We make a copy here to avoid racing with a concurrent modification.
+        return copy.deepcopy(self.inMemoryMap)
+
 
 class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
     # Map short URL suffix to full URL
@@ -207,6 +214,7 @@ List of commands:
   add <fullUrl> [shortUrl]
   del <shortUrl>
   get <shortUrl>
+  list [-l]
                 """.strip()
                 clientsocket.send(controlCommands + "\n")
             elif cmd == 'add':
@@ -232,6 +240,15 @@ List of commands:
                 else:
                     output = ShortenURLHandler.shortUrlMap[argv[1]]
                 clientsocket.send(output + "\n")
+            elif cmd == 'list' or cmd == "ls":
+                output = []
+                d = ShortenURLHandler.shortUrlMap.snapshot()
+                for key in d:
+                  if len(argv) > 1 and argv[1] == "-l":
+                    output.append(key + " : " + d[key])
+                  else:
+                    output.append(key)
+                clientsocket.send("\n".join(output) + "\n")
             else:
                 clientsocket.send("Unrecognized command '%s'\n" % buf)
             promptSent = False
