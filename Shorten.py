@@ -31,7 +31,7 @@ class KeyExistError(Exception):
 # This class is thread-safe. It serves reads from memory and writes
 # persistently to disk before returning.
 class SqliteBackedKVStore(object):
-    def __init__(self, dbPath="Shortener.db", table="short_url_to_url", keyCol="shortUrl", valueCol="longUrl"):
+    def __init__(self, dbPath="Shortener.db", table="short_url_to_url", keyCol="shortUrl", valueCol="fullUrl"):
        self.mutex = threading.Lock()
        self.dbPath = dbPath
        self.table = table
