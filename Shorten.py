@@ -6,12 +6,16 @@ from sys import exit
 import logging
 import sqlite3
 
+# Option parsing
+from docopt import docopt
+
 # Used for control interface
 from threading import Thread
 import threading
 import socket, sys
 import shlex
 import copy
+
 
 # Control-related variables
 CONTROL_PORT = 7770
@@ -280,7 +284,23 @@ List of commands:
     thread = Thread(target=accept_commands)
     thread.start()
 
+doc = r"""
+Shorten.py. Personal URL shortener, to run on your own domain, subdomain, or
+custom path. Specify DOMAIN_PREFIX as the prefix of your shortened URLs,
+starting with the http or https.
+
+Usage: ./Shorten.py [-h] [-p <port>] [-c <control_port>] [-s <dbfile>] DOMAIN_PREFIX
+
+    -h,--help               show this
+    -p,--port <port>        specify the port that this Shortener should run on [default: 8880].
+    -c,--controlport <port> specify the port that this Shortener should run on [default: 7770].
+    -s,--sqlite <dbfile>    specify the filename of the sqlite3 database file [default: Shortener.db].
+"""
+
 def main():
+	# Examine options
+    options = docopt(doc)
+
     # Set up signal handlers
     def handler(signum, frame):
         global shutdownRequested
