@@ -24,10 +24,14 @@ MAX_COMMAND_LENGTH = 4096
 shutdownRequested = False
 
 PORT=8880
+DB_FILE="Shortener.db"
 FORM_PATH="Shorten.html"
 
-# This should be set based on your domain, and omit the trailing `/`.
+# This should be set based on your domain.
 DOMAIN_PREFIX = "https://hq6.me/u"
+
+# The object performing the shorten operations.
+shortener = None
 
 class KeyExistError(Exception):
     pass
@@ -89,11 +93,50 @@ class SqliteBackedKVStore(object):
         # We make a copy here to avoid racing with a concurrent modification.
         return copy.deepcopy(self.inMemoryMap)
 
+# TODO: Migrate most of the functionality of ShortenURLHandler into the class
+# below. The handler should invoke methods of this class.
+class URLShortener():
+    def __init__(self, dbfile):
+       # Map short URL suffix to full URL
+       self.shortUrlMap = SqliteBackedKVStore(dbfile)
+       self.nextGenerated = 1
+       pass
+
+    # The shortUrl parameter is a preference, not a requirement.  If the given
+    # shortURL is alraedy taken, a numerical shortURL will be assigned.
+    def shorten(self, fullUrl, shortUrl = None):
+      # Allow only alphanumeric URLs
+      if shortUrl:
+          shortUrl = re.sub("[\W_]+", '', shortUrl)
+      else:
+          shortUrl = str(self.nextGenerated)
+          self.nextGenerated += 1
+
+      success = False
+      while not success:
+        try:
+          self.shortUrlMap[shortUrl] = fullUrl
+          success = True
+        except KeyExistError:
+          # On failure, try with generated URLs until success.
+          shortUrl = str(self.nextGenerated)
+          self.nextGenerated += 1
+          success = False
+      return shortUrl
+
+    def remove(self, shortUrl):
+      del self.shortUrlMap[shortUrl]
+
+    def get(self, path):
+      if path in self.shortUrlMap:
+        return self.shortUrlMap[path]
+      return None
+
+    def list(self):
+      return self.shortUrlMap.snapshot()
+
 
 class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
-    # Map short URL suffix to full URL
-    shortUrlMap = SqliteBackedKVStore()
-    nextGenerated = 1
     def __init__(self, *args, **kwargs):
         super(ShortenURLHandler, self).__init__(*args, **kwargs)
 
@@ -103,27 +146,6 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
                           self.log_date_time_string(),
 						  fmtstr%args))
 
-    # Note that the shortUrl parameter is a preference.
-    @staticmethod
-    def shorten(fullUrl, shortUrl = None):
-      # Allow only alphanumeric URLs
-      if shortUrl:
-          shortUrl = re.sub("[\W_]+", '', shortUrl)
-      else:
-          shortUrl = str(ShortenURLHandler.nextGenerated)
-          ShortenURLHandler.nextGenerated += 1
-
-      success = False
-      while not success:
-        try:
-          ShortenURLHandler.shortUrlMap[shortUrl] = fullUrl
-          success = True
-        except KeyExistError:
-          # On failure, try with generated URLs until success.
-          shortUrl = str(ShortenURLHandler.nextGenerated)
-          ShortenURLHandler.nextGenerated += 1
-          success = False
-      return shortUrl
 
 
     # This assumes that the return code is 200.
@@ -136,12 +158,11 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
 
     def do_GET(self):
       path = self.path.lstrip("/")
-      resp = None
       logging.debug("Received request for path: " +  path)
-      if path in ShortenURLHandler.shortUrlMap:
-        resp = ShortenURLHandler.shortUrlMap[path]
+      fullUrl = shortener.get(path)
+      if fullUrl:
         self.send_response(302)
-        self.send_header("Location", resp)
+        self.send_header("Location", fullUrl)
         self.end_headers()
       else:
         createForm = None
@@ -174,7 +195,7 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       if 'desiredShortUrl' in parsedBody:
           shortUrl = parsedBody['desiredShortUrl'][0]
 
-      shortUrl = ShortenURLHandler.shorten(fullUrl, shortUrl)
+      shortUrl = shortener.shorten(fullUrl, shortUrl)
 
       # Send response
       self.write_response("%s/%s" % (DOMAIN_PREFIX.rstrip('/'), shortUrl))
@@ -231,28 +252,28 @@ List of commands:
                 if len(argv) < 2:
                     output = "Usage: add <fullUrl> [shortUrl]"
                 elif len(argv) == 2:
-                    output = ShortenURLHandler.shorten(argv[1])
+                    output = shortener.shorten(argv[1])
                 else:
-                    output = ShortenURLHandler.shorten(argv[1], argv[2])
+                    output = shortener.shorten(argv[1], argv[2])
                 clientsocket.send(output)
             elif cmd == 'del' or cmd == "rm":
                 if len(argv) < 2:
                     clientsocket.send("Usage: del <shortUrl>")
                 else:
-                    del ShortenURLHandler.shortUrlMap[argv[1]]
+                    shortener.remove(argv[1])
                     sentOutput = False
             elif cmd == 'get' or cmd == "cat":
                 output = ""
                 if len(argv) < 2:
                     output = "Usage: get <shortUrl>"
-                elif argv[1] not in ShortenURLHandler.shortUrlMap:
+                elif not shortener.get(argv[1]):
                     output = "Key '%s' not found." % argv[1]
                 else:
-                    output = ShortenURLHandler.shortUrlMap[argv[1]]
+                    output = shortener.get(argv[1])
                 clientsocket.send(output)
             elif cmd == 'list' or cmd == "ls":
                 output = []
-                d = ShortenURLHandler.shortUrlMap.snapshot()
+                d = shortener.list()
                 for key in d:
                   if len(argv) > 1 and argv[1] == "-l":
                     output.append(key + " : " + d[key])
@@ -291,15 +312,20 @@ starting with the http or https.
 
 Usage: ./Shorten.py [-h] [-p <port>] [-c <control_port>] [-s <dbfile>] DOMAIN_PREFIX
 
-    -h,--help               show this
-    -p,--port <port>        specify the port that this Shortener should run on [default: 8880].
-    -c,--controlport <port> specify the port that this Shortener should run on [default: 7770].
-    -s,--sqlite <dbfile>    specify the filename of the sqlite3 database file [default: Shortener.db].
+    -h,--help                show this
+    -p,--port <port>         specify the port that this Shortener should run on [default: 8880]
+    -c,--controlport <port>  specify the port that command shell should run on [default: 7770]
+    -s,--sqlite <dbfile>     specify the filename of the sqlite3 database file [default: Shortener.db]
 """
 
 def main():
 	# Examine options
     options = docopt(doc)
+    global DOMAIN_PREFIX, PORT, CONTROL_PORT, DB_FILE, shortener
+    DOMAIN_PREFIX = options['DOMAIN_PREFIX']
+    PORT = int(options['--port'])
+    CONTROL_PORT = int(options['--controlport'])
+    DB_FILE = options['--sqlite']
 
     # Set up signal handlers
     def handler(signum, frame):
@@ -313,6 +339,9 @@ def main():
 
 	# Set up logging
     logging.basicConfig(level=logging.INFO)
+
+    # Instantiate the shortener
+    shortener = URLShortener(DB_FILE)
 
     # Set up a control interface on a separate thread that we can telnet to and
     # issue commands.
