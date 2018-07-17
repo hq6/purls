@@ -32,11 +32,19 @@ https://hq6.me/u/, I can invoke purls as follows::
 
     python purls.py https://hq6.me/u/
 
+Installation
+==================
+
+This software is only compatible with Python 2, so installation must be done
+with one of the following commands::
+
+    pip2 install purls
+    pip2.7 install purls
 """
 
 setup(
   name="purls",
-  version='0.0.1',
+  version='0.0.3',
   scripts=['purls.py', 'SqliteKVStore.py', 'URLShortener.py'],
   install_requires=['docopt>=0.2'],
   author="Henry Qin",
