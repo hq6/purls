@@ -15,7 +15,6 @@ from docopt import docopt
 from threading import Thread
 import threading
 import socket, sys
-import shlex
 
 # Hardcoded constants
 FORM_PATH="Shorten.html"
@@ -119,63 +118,19 @@ def startControlInterface(controlPort):
             buf = buf.strip()
             # Ignore empty lines
             if buf == '':
-               promptSent = False
-               continue
-
-            # Assume that commands send output unless they specify otherwise.
-            sentOutput = True
-            argv = shlex.split(buf)
-            cmd = argv[0].lower()
-            if cmd == 'exit':
-                print "Client disconnected from control interface..."
-                clientsocket.close()
-                return
-            elif cmd == 'help':
-                controlCommands = """
-List of commands:
-  help
-  exit
-  add <fullUrl> [shortUrl]
-  del <shortUrl>
-  get <shortUrl>
-  list [-l]
-                """.strip()
-                clientsocket.send(controlCommands)
-            elif cmd == 'add':
-                output = ""
-                if len(argv) < 2:
-                    output = "Usage: add <fullUrl> [shortUrl]"
-                elif len(argv) == 2:
-                    output = shortener.shorten(argv[1])
-                else:
-                    output = shortener.shorten(argv[1], argv[2])
-                clientsocket.send(output)
-            elif cmd == 'del' or cmd == "rm":
-                if len(argv) < 2:
-                    clientsocket.send("Usage: del <shortUrl>")
-                else:
-                    shortener.remove(argv[1])
-                    sentOutput = False
-            elif cmd == 'get' or cmd == "cat":
-                output = ""
-                if len(argv) < 2:
-                    output = "Usage: get <shortUrl>"
-                elif not shortener.get(argv[1]):
-                    output = "Key '%s' not found." % argv[1]
-                else:
-                    output = shortener.get(argv[1])
-                clientsocket.send(output)
-            elif cmd == 'list' or cmd == "ls":
-                output = []
-                d = shortener.list()
-                for key in d:
-                  if len(argv) > 1 and argv[1] == "-l":
-                    output.append(key + " : " + d[key])
-                  else:
-                    output.append(key)
-                clientsocket.send("\n".join(output))
+              promptSent = False
+              continue
+            output = shortener.handleCommand(buf)
+            # This is an explicit check for False because we do not want to
+            # interpret the empty string as False.
+            if output == False:
+              clientsocket.close()
+              return
+            if output != "":
+              clientsocket.send(output)
+              sentOutput = True
             else:
-                clientsocket.send("Unrecognized command '%s'" % buf)
+              sentOutput = False
             promptSent = False
           except socket.timeout:
             pass
