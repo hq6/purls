@@ -37,7 +37,7 @@ https://hq6.me/u/, I can invoke purls as follows::
 setup(
   name="purls",
   version='0.0.1',
-  scripts=['purls.py'],
+  scripts=['purls.py', 'SqliteKVStore.py', 'URLShortener.py'],
   install_requires=['docopt>=0.2'],
   author="Henry Qin",
   author_email="root@hq6.me",

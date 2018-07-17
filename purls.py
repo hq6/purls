@@ -159,7 +159,7 @@ purls.py: Personal URL shortener, to run on your own domain, subdomain, or
 custom path. Specify DOMAIN_PREFIX as the prefix of your shortened URLs,
 starting with the http or https.
 
-Usage: ./purls.py [-h] [-p <port>] [-c <control_port>] [-s <dbfile>] DOMAIN_PREFIX
+Usage: ./purls.py [-h] [-p <port>] [-c <controlport>] [-s <dbfile>] DOMAIN_PREFIX
 
     -h,--help                show this
     -p,--port <port>         specify the port that this Shortener should run on [default: 8880]
@@ -195,6 +195,9 @@ def main():
     # Set up a control interface on a separate thread that we can telnet to and
     # issue commands.
     startControlInterface(controlPort)
+
+    # Print diagnostic information
+    print "purls serving\n\tDB File: %s\n\tServing Port: %d\n\tDomain Prefix: %s\n\tControl Port: %d" % (dbfile, port, DOMAIN_PREFIX, controlPort)
 
     # Start the web server
     run(BaseHTTPServer.HTTPServer, ShortenURLHandler, port);
