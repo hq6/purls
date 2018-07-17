@@ -16,18 +16,15 @@ import socket, sys
 import shlex
 import copy
 
-
-# Control-related variables
-CONTROL_PORT = 7770
+# Hardcoded constants
+FORM_PATH="Shorten.html"
 CONTROL_HOST = '127.0.0.1'
 MAX_COMMAND_LENGTH = 4096
+
+# Used for synchronization between signal handlers are all other threads.
 shutdownRequested = False
 
-PORT=8880
-DB_FILE="Shortener.db"
-FORM_PATH="Shorten.html"
-
-# This should be set based on your domain.
+# Used to output the appropriate prefix for shortened URLs.
 DOMAIN_PREFIX = "https://hq6.me/u"
 
 # The object performing the shorten operations.
@@ -93,8 +90,6 @@ class SqliteBackedKVStore(object):
         # We make a copy here to avoid racing with a concurrent modification.
         return copy.deepcopy(self.inMemoryMap)
 
-# TODO: Migrate most of the functionality of ShortenURLHandler into the class
-# below. The handler should invoke methods of this class.
 class URLShortener():
     def __init__(self, dbfile):
        # Map short URL suffix to full URL
@@ -200,13 +195,12 @@ class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
       # Send response
       self.write_response("%s/%s" % (DOMAIN_PREFIX.rstrip('/'), shortUrl))
 
-def run(server_class=BaseHTTPServer.HTTPServer,
-        handler_class=BaseHTTPServer.BaseHTTPRequestHandler):
-    server_address = ('', PORT)
+def run(server_class, handler_class, port):
+    server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     httpd.serve_forever()
 
-def startControlInterface():
+def startControlInterface(controlPort):
     def handle(clientsocket):
         print "Client connected to control interface..."
         clientsocket.settimeout(1)
@@ -289,7 +283,7 @@ List of commands:
         global shutdownRequested
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        serversocket.bind((CONTROL_HOST, CONTROL_PORT))
+        serversocket.bind((CONTROL_HOST, controlPort))
         serversocket.listen(10)
 
         # This is necessary to allow clean shutdowns
@@ -321,11 +315,11 @@ Usage: ./Shorten.py [-h] [-p <port>] [-c <control_port>] [-s <dbfile>] DOMAIN_PR
 def main():
 	# Examine options
     options = docopt(doc)
-    global DOMAIN_PREFIX, PORT, CONTROL_PORT, DB_FILE, shortener
+    global DOMAIN_PREFIX, shortener
     DOMAIN_PREFIX = options['DOMAIN_PREFIX']
-    PORT = int(options['--port'])
-    CONTROL_PORT = int(options['--controlport'])
-    DB_FILE = options['--sqlite']
+    port = int(options['--port'])
+    controlPort = int(options['--controlport'])
+    dbfile = options['--sqlite']
 
     # Set up signal handlers
     def handler(signum, frame):
@@ -341,14 +335,14 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Instantiate the shortener
-    shortener = URLShortener(DB_FILE)
+    shortener = URLShortener(dbfile)
 
     # Set up a control interface on a separate thread that we can telnet to and
     # issue commands.
-    startControlInterface()
+    startControlInterface(controlPort)
 
     # Start the web server
-    run(BaseHTTPServer.HTTPServer, ShortenURLHandler);
+    run(BaseHTTPServer.HTTPServer, ShortenURLHandler, port);
 
 if __name__ == "__main__":
 	main()
