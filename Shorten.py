@@ -4,7 +4,9 @@ import re
 from signal import signal, SIGINT, SIGTERM
 from sys import exit
 import logging
-import sqlite3
+
+# Actual shortener
+from URLShortener import URLShortener
 
 # Option parsing
 from docopt import docopt
@@ -14,7 +16,6 @@ from threading import Thread
 import threading
 import socket, sys
 import shlex
-import copy
 
 # Hardcoded constants
 FORM_PATH="Shorten.html"
@@ -29,107 +30,6 @@ DOMAIN_PREFIX = "https://hq6.me/u"
 
 # The object performing the shorten operations.
 shortener = None
-
-class KeyExistError(Exception):
-    pass
-
-# This class is thread-safe. It serves reads from memory and writes
-# persistently to disk before returning.
-class SqliteBackedKVStore(object):
-    def __init__(self, dbPath="Shortener.db", table="short_url_to_url", keyCol="shortUrl", valueCol="fullUrl"):
-       self.mutex = threading.Lock()
-       self.dbPath = dbPath
-       self.table = table
-       self.keyCol = keyCol
-       self.valueCol = valueCol
-
-       with self.mutex:
-         self.inMemoryMap = {}
-         self.db = sqlite3.connect(dbPath, check_same_thread=False)
-         self.db.row_factory = sqlite3.Row
-         c = self.db.cursor()
-         c.execute("CREATE TABLE IF NOT EXISTS {} ({} TEXT PRIMARY KEY, {} TEXT)".format(table, keyCol, valueCol))
-         # Read inMemoryMap out of the db
-         rows = c.execute('SELECT "{}" as key, "{}" as value from "{}"'.format(keyCol, valueCol, table))
-         for row in rows:
-            self.inMemoryMap[row["key"]] = row["value"]
-
-    def __getitem__(self, key):
-      with self.mutex:
-        return self.inMemoryMap[key]
-
-    def __contains__(self, key):
-      with self.mutex:
-        return key in self.inMemoryMap
-
-    # This will insert but not update; should raise a KeyExistError if the key
-    # already exists
-    def __setitem__(self, key, val):
-      with self.mutex:
-        c = self.db.cursor()
-        try:
-          c.execute("INSERT INTO {} ({}, {}) VALUES(?, ?)".format(self.table, self.keyCol, self.valueCol), (key, val))
-          self.db.commit()
-        except sqlite3.IntegrityError:
-          raise KeyExistError
-        # Write to in-memory map only if the db write succeeded.
-        self.inMemoryMap[key] = val
-
-    def __delitem__(self, key):
-      with self.mutex:
-        c = self.db.cursor()
-        c.execute("DELETE FROM {} WHERE {} = ?".format(self.table, self.keyCol), (key,))
-        self.db.commit()
-        try:
-          del self.inMemoryMap[key]
-        except KeyError:
-          pass
-
-    def snapshot(self):
-      with self.mutex:
-        # We make a copy here to avoid racing with a concurrent modification.
-        return copy.deepcopy(self.inMemoryMap)
-
-class URLShortener():
-    def __init__(self, dbfile):
-       # Map short URL suffix to full URL
-       self.shortUrlMap = SqliteBackedKVStore(dbfile)
-       self.nextGenerated = 1
-       pass
-
-    # The shortUrl parameter is a preference, not a requirement.  If the given
-    # shortURL is alraedy taken, a numerical shortURL will be assigned.
-    def shorten(self, fullUrl, shortUrl = None):
-      # Allow only alphanumeric URLs
-      if shortUrl:
-          shortUrl = re.sub("[\W_]+", '', shortUrl)
-      else:
-          shortUrl = str(self.nextGenerated)
-          self.nextGenerated += 1
-
-      success = False
-      while not success:
-        try:
-          self.shortUrlMap[shortUrl] = fullUrl
-          success = True
-        except KeyExistError:
-          # On failure, try with generated URLs until success.
-          shortUrl = str(self.nextGenerated)
-          self.nextGenerated += 1
-          success = False
-      return shortUrl
-
-    def remove(self, shortUrl):
-      del self.shortUrlMap[shortUrl]
-
-    def get(self, path):
-      if path in self.shortUrlMap:
-        return self.shortUrlMap[path]
-      return None
-
-    def list(self):
-      return self.shortUrlMap.snapshot()
-
 
 class ShortenURLHandler(BaseHTTPServer.BaseHTTPRequestHandler, object):
     def __init__(self, *args, **kwargs):

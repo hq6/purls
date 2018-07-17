@@ -1,0 +1,5 @@
+# Data files
+*.db
+
+# Generated files
+*.pyc
