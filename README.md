@@ -31,3 +31,8 @@ shortened URLs is https://hq6.me/u/, I can invoke purls as follows.
 
 purls.py starts an **unauthenticated command shell** on port 7770 by default.
 Please *make sure that this port is protected by your firewall*.
+
+## Dependencies
+
+ * Python 2.7
+ * sqlite3 module.
