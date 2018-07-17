@@ -26,3 +26,8 @@ shortened URL's to be passed. For example, if the domain prefix of the
 shortened URLs is https://hq6.me/u/, I can invoke purls as follows.
 
     python purls.py https://hq6.me/u/
+
+## Warning
+
+purls.py starts an **unauthenticated command shell** on port 7770 by default.
+Please *make sure that this port is protected by your firewall*.
