@@ -1,5 +1,6 @@
 from SqliteKVStore import SqliteKVStore, KeyExistError
 import shlex
+import re
 
 class URLShortener():
     def __init__(self, dbfile):
