@@ -36,3 +36,10 @@ Please *make sure that this port is protected by your firewall*.
 
  * Python 2.7
  * sqlite3 module.
+
+# Demo
+
+There is a demo running at https://hq6.me/u.
+
+Please do not assume that short URLs created there will be persisted for any
+amount of time.
