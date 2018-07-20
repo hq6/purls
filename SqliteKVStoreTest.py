@@ -1,8 +1,8 @@
 import unittest, os, gc
-from URLShortener import URLShortener
 from SqliteKVStore import SqliteKVStore, KeyExistError
 
 import string, random
+import timeit
 
 def generateRandomString(size=6, chars=string.ascii_uppercase + string.digits):
   return ''.join(random.choice(chars) for _ in range(size))
@@ -52,11 +52,6 @@ class TestSqliteKVStore(unittest.TestCase):
     self.sql = SqliteKVStore(self.dbfile)
     self.assertRaises(KeyError, lambda: self.sql["Key"])
     self.sql["Key2"]
-
-  def test_get_perf(self):
-    pass
-  def test_set_perf(self):
-    pass
 
 if __name__ == '__main__':
   unittest.main()
