@@ -48,7 +48,8 @@ class URLShortener():
       # Assume that commands send output unless they specify otherwise.
       argv = shlex.split(commandLine)
       cmd = argv[0].lower()
-      if cmd == 'exit':
+      # Check for receiving EOT character.
+      if cmd == 'exit' or ord(cmd[0]) == 4:
           print "Client disconnected from control interface..."
           return False
       elif cmd == 'help':
@@ -92,4 +93,4 @@ List of commands:
               output.append(key)
           return "\n".join(output)
       else:
-          return "Unrecognized command '%s'" % buf
+          return "Unrecognized command '%s'" % commandLine

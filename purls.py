@@ -105,7 +105,7 @@ def startControlInterface(controlPort):
         clientsocket.settimeout(1)
         clientsocket.send(">")
         promptSent = True
-        sentOutput = True
+        sentOutput = False
         global shutdownRequested
         while not shutdownRequested:
           try:
